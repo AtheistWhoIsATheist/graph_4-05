@@ -46,6 +46,39 @@ export interface GraphEdge {
   user_confirmed?: boolean;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'ai' | 'system';
+  content: string;
+  timestamp: number;
+  provenance?: string[];
+  isInference?: boolean;
+}
+
+export interface SessionSummary {
+  id: string;
+  timestamp: number;
+  summary: string;
+  keyTensions: string[];
+  resolvedClaims: string[];
+}
+
+export interface EpisodicMemory {
+  recentSessions: SessionSummary[];
+  globalThematicResidue: string;
+}
+
+export interface GraphContext {
+  selectedNode?: GraphNode;
+  selectedEdge?: GraphEdge;
+  visibleNeighborhood?: string;
+  activeDocument?: Document;
+  argumentMapElements?: string;
+  isDefenseMode?: boolean;
+  thinkingMode?: 'Auto' | 'Deep' | 'Fast';
+  episodicMemory?: EpisodicMemory;
+}
+
 export interface Document {
   id: string;
   title: string;

@@ -1,20 +1,55 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Nihiltheism Knowledge Graph (ANG)
 
-# Run and deploy your AI Studio app
+This repository contains the Adaptive Nexus Graph (ANG), a production-ready, graph-native chatbot system designed to explore the philosophical framework of **Nihiltheism**.
 
-This contains everything you need to run your app locally.
+## What is the Nihiltheism Knowledge Graph?
 
-View your app in AI Studio: https://ai.studio/apps/35262c64-a864-4dae-9698-efe3d80c5275
+Nihiltheism is a novel philosophical framework bridging classical theism and atheism, emphasizing the lived experience of Nihilism's meaninglessness (the "Void-as-Presence"). This application serves as a research memory, conceptual map, and discovery engine for these ideas.
 
-## Run Locally
+## Features
 
-**Prerequisites:**  Node.js
+### Graph-Native Chat (Professor Nihil)
+The chatbot is not a generic assistant; it is the interpretive voice of the graph itself. It reasons through:
+- Selected nodes and edges
+- Local graph neighborhoods
+- Ingested documents and notes
+- Argument map structures
+- Aporia markers
 
+### Defense Mode
+An adversarial, critical mode where the system aggressively tests claims, surfaces weak evidence, and challenges sentimental interpretations.
+
+### Ingestion & Aporia Detection
+Upload Markdown or text files to ingest them into the graph. The system can automatically extract "aporia markers" (points of irresolvable contradiction or profound doubt) using Gemini.
+
+### Node Synthesis
+The graph supports ontological metrics (`voidWeight`, `resonanceWeight`, `structuralTension`, `epistemicVolatility`, `saturationIndex`) that shape the UI and chatbot behavior.
+
+## How to Run Locally
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+   ```bash
+   npm install
+   ```
+
+2. Set up your environment variables:
+   Create a `.env` file in the root directory and add your Gemini API key:
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Offline Mode
+If the Gemini API key is not provided or the service is unavailable, the application gracefully degrades. The graph, node inspection, ingestion, and search will still function. The chatbot will return deterministic graph context instead of deep philosophical synthesis.
+
+## Repository Structure
+- `/src/components`: UI components (GraphView, NoteEditor, ArgumentMap, DefenseMode).
+- `/src/data`: Raw graph data and mock data.
+- `/src/lib/ingestion`: Markdown parsing and ingestion logic.
+- `/src/services`: Gemini API integration (`chatService.ts`, `geminiService.ts`).
+- `/src/prompts`: System prompts for the chatbot.
+- `/src/types.ts`: Core domain ontology and type definitions.

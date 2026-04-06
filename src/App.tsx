@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import GraphView, { GraphViewType } from './components/GraphView';
 import NoteEditor from './components/NoteEditor';
 import ArgumentMap from './components/ArgumentMap';
 import DefenseMode from './components/DefenseMode';
 import { initialNodes, initialEdges, initialDocuments } from './data/mockData';
 import { ntNodes, ntEdges } from './data/ntgraphData';
-import { Document, GraphNode, GraphEdge } from './types';
+import { Document, GraphNode, GraphEdge, ChatMessage, GraphContext } from './types';
 import { Database, Network, BrainCircuit, Search, Settings, Mic, Send, Brain, Filter, Upload, Presentation, ListTree } from 'lucide-react';
 import { parseMarkdown } from './lib/ingestion/markdownAdapter';
+import { generateChatResponse } from './services/chatService';
 
 export default function App() {
   const [nodes, setNodes] = useState<GraphNode[]>([...initialNodes, ...ntNodes]);
@@ -25,35 +26,104 @@ export default function App() {
   const [isDefenseModeActive, setIsDefenseModeActive] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('p1');
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<{role: 'user'|'ai', content: string}[]>([
-    { role: 'ai', content: 'Phase 1 Knowledge Graph active. Ready for conceptual mapping and navigation.' }
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { id: 'msg-0', role: 'ai', content: 'Professor Nihil online. The graph is active. What tensions shall we explore?', timestamp: Date.now() }
   ]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  const [selectedNode, setSelectedNode] = useState<GraphNode | undefined>(undefined);
+  const [selectedEdge, setSelectedEdge] = useState<GraphEdge | undefined>(undefined);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const activeDocument = documents.find(d => d.id === activeDocId) || documents[0];
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const handleNodeClick = (node: GraphNode) => {
-    console.log('Node clicked:', node.label);
-    // Future: filter documents by linked node
+    setSelectedNode(node);
+    setSelectedEdge(undefined);
   };
 
   const handleEdgeClick = (edge: GraphEdge) => {
-    console.log('Edge clicked:', edge.type, edge.explanation);
+    setSelectedEdge(edge);
+    setSelectedNode(undefined);
   };
 
   const handleSaveDocument = (updatedDoc: Document) => {
     setDocuments(docs => docs.map(d => d.id === updatedDoc.id ? updatedDoc : d));
   };
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return;
-    setMessages([...messages, { role: 'user', content: chatInput }]);
+  const buildGraphContext = (): GraphContext => {
+    // Build visible neighborhood string
+    let visibleNeighborhood = '';
+    if (selectedNode) {
+      const neighbors = edges
+        .filter(e => e.source === selectedNode.id || e.target === selectedNode.id)
+        .map(e => {
+          const otherId = e.source === selectedNode.id ? e.target : e.source;
+          const otherNode = nodes.find(n => n.id === otherId);
+          return otherNode ? `- ${e.type} -> ${otherNode.label} (${otherNode.type})` : '';
+        })
+        .filter(Boolean)
+        .join('\n');
+      if (neighbors) {
+        visibleNeighborhood = `Neighbors of ${selectedNode.label}:\n${neighbors}`;
+      }
+    }
+
+    return {
+      selectedNode,
+      selectedEdge,
+      visibleNeighborhood,
+      activeDocument,
+      isDefenseMode: isDefenseModeActive,
+      thinkingMode
+    };
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
+    
+    const newUserMsg: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'user',
+      content: chatInput,
+      timestamp: Date.now()
+    };
+
+    setMessages(prev => [...prev, newUserMsg]);
     setChatInput('');
-    // Simulate AI response
-    setTimeout(() => {
-      setMessages(prev => [...prev, { role: 'ai', content: `[${thinkingMode} Path] Processing query through Void-as-Presence lens. Paradox detected. Apophatic guardrails engaged.` }]);
-    }, 1000);
+    setIsChatLoading(true);
+
+    const context = buildGraphContext();
+    
+    try {
+      const responseText = await generateChatResponse([...messages, newUserMsg], context);
+      
+      const newAiMsg: ChatMessage = {
+        id: `msg-${Date.now() + 1}`,
+        role: 'ai',
+        content: responseText,
+        timestamp: Date.now()
+      };
+      
+      setMessages(prev => [...prev, newAiMsg]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      const errorMsg: ChatMessage = {
+        id: `msg-${Date.now() + 1}`,
+        role: 'ai',
+        content: "An error occurred while consulting the graph. Please try again.",
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,12 +135,8 @@ export default function App() {
       const content = event.target?.result as string;
       const sourceId = `doc-${Date.now()}`;
       
-      // 1. Run through Text/Markdown Adapter
       const documentTree = parseMarkdown(sourceId, content);
       
-      console.log('Ingestion Pipeline Output (DocumentTree):', documentTree);
-      
-      // 2. Add to UI state
       const newDoc: Document = {
         id: sourceId,
         title: documentTree.metadata.title || file.name,
@@ -79,7 +145,6 @@ export default function App() {
         linkedNodes: []
       };
 
-      // Add a Source node to the graph
       const newNode: GraphNode = {
         id: sourceId,
         label: newDoc.title,
@@ -95,13 +160,14 @@ export default function App() {
       setActiveDocId(sourceId);
       
       setMessages(prev => [...prev, { 
+        id: `msg-${Date.now()}`,
         role: 'ai', 
-        content: `Ingested source: "${newDoc.title}". Parsed ${documentTree.blocks.length} blocks, ${documentTree.sections.length} sections, and ${documentTree.links.length} links.` 
+        content: `Ingested source: "${newDoc.title}". Parsed ${documentTree.blocks.length} blocks, ${documentTree.sections.length} sections, and ${documentTree.links.length} links.`,
+        timestamp: Date.now()
       }]);
     };
     reader.readAsText(file);
     
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -224,13 +290,21 @@ export default function App() {
             {/* Chat Interface */}
             <div className="h-64 rounded-lg border border-zinc-800 bg-[#0a0a0a] flex flex-col">
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-                {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[80%] rounded-lg p-3 text-sm font-mono ${msg.role === 'user' ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}>
                       {msg.content}
                     </div>
                   </div>
                 ))}
+                {isChatLoading && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[80%] rounded-lg p-3 text-sm font-mono bg-zinc-900 text-zinc-500 border border-zinc-800 animate-pulse">
+                      Professor Nihil is thinking...
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
               </div>
               <div className="p-3 border-t border-zinc-800 bg-[#050505] flex gap-2">
                 <button className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors rounded bg-zinc-900 border border-zinc-800">
@@ -242,9 +316,10 @@ export default function App() {
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Query the ANG..."
-                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-3 text-sm font-mono text-zinc-200 outline-none focus:border-zinc-600 transition-colors"
+                  disabled={isChatLoading}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-3 text-sm font-mono text-zinc-200 outline-none focus:border-zinc-600 transition-colors disabled:opacity-50"
                 />
-                <button onClick={handleSendMessage} className="p-2 text-zinc-900 bg-zinc-200 hover:bg-white transition-colors rounded">
+                <button onClick={handleSendMessage} disabled={isChatLoading} className="p-2 text-zinc-900 bg-zinc-200 hover:bg-white transition-colors rounded disabled:opacity-50">
                   <Send size={18} />
                 </button>
               </div>
